@@ -9,13 +9,13 @@ import time
 
 JSON_FILE = "./trust_file.json"
 data = {} 
-hosts_en_revision = {}  # Ahora guardará {ip: set(mac1, mac2, ...)}
+hosts_en_revision = {}  # Ahora guarda {ip: set(mac1, mac2, ...)}
 
 def load_json(file_dir):
     try:
         with open(file_dir, "r", encoding="UTF-8") as f:
             raw_data = json.load(f)
-            return {ip: mac.lower() for ip, mac in raw_data.items()}
+            return raw_data # los datos de cada "whitelist" varian asi q antes de correrlo, verificar con los suyos!
             
     except FileNotFoundError:
         print(f"Error: El archivo '{file_dir}' no existe.")
@@ -94,7 +94,7 @@ def alert(tipo, ip_rogue, mac_rogue, now, **kwargs):
     meta.update(kwargs)
     
     if tipo == "dhcp spoofing":
-        msg = f"[{tipo}] Datos del rogue: {ip_rogue} --- {mac_rogue}"
+        msg = f"[{tipo}] Datos del rogue: {ip_rogue} --- {mac_rogue} --- "
     else:
         msg = f"[{tipo}] msj sin categoria"
 
@@ -131,11 +131,19 @@ def spoof_detector(packet):
         dns_dado = dhcp_dict.get("name_server", None)
 
         # chequeo
-
-        mac_valida=data.get(ip_emisor, None)
+        mac_valida = None
+        if ip_emisor in data:
+            mac_valida = data[ip_emisor]["white_mac"].lower()
 
         if mac_valida is None or mac_valida != mac_emisor:
             alert("dhcp spoofing", ip_emisor, mac_emisor, time.time(), gateway_dado=gateway_dado, dns_dado=dns_dado, server_id_dado=server_id_emisor)
+        else:
+            gateway_valido = data[ip_emisor]["white_gateway"]
+            dns_valido = data[ip_emisor]["white_dns"]
+
+            if gateway_valido != gateway_dado or dns_valido != dns_dado:
+                alert("dhcp spoofing", ip_emisor, mac_emisor, time.time(), gateway_dado=gateway_dado, dns_dado=dns_dado, server_id_dado=server_id_emisor)
+
 
 
 def sniff_network(iface, count):
